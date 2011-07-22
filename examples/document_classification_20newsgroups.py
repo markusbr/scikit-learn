@@ -23,11 +23,13 @@ loader or setting them to None to get the 20 of them.
 # License: Simplified BSD
 
 import logging
-import numpy as np
 from operator import itemgetter
 from optparse import OptionParser
 import sys
 from time import time
+
+import numpy as np
+import pylab as pl
 
 from scikits.learn.datasets import fetch_20newsgroups
 from scikits.learn.feature_extraction.text import Vectorizer
@@ -140,25 +142,25 @@ def trim(s):
 ###############################################################################
 # Benchmark classifiers
 def benchmark(clf):
-    print 80 * '_'
-    print "Training: "
+    print 80 * '='
     print clf
+    print 80 * '_'
     t0 = time()
     clf.fit(X_train, y_train)
     train_time = time() - t0
-    print "train time: %0.3fs" % train_time
+    print "train time: %0.3fs " % train_time,
 
     t0 = time()
     pred = clf.predict(X_test)
     test_time = time() - t0
-    print "test time:  %0.3fs" % test_time
+    print "test time:  %0.3fs " % test_time,
 
     score = metrics.f1_score(y_test, pred)
-    print "f1-score:   %0.3f" % score
+    print "f1-score:   %0.3f " % score, 
 
     if hasattr(clf, 'coef_'):
         nnz = clf.coef_.nonzero()[0].shape[0]
-        print "non-zero coef: %d" % nnz
+        print "non-zero coef: %d" % nnz,
 
         if opts.print_top10:
             print "top 10 keywords per class:"
@@ -179,31 +181,47 @@ def benchmark(clf):
     print
     return score, train_time, test_time
 
-for clf, name in ((RidgeClassifier(tol=1e-1), "Ridge Classifier"),
+################################################################################
+# Bench the different classifiers
+results = dict()
+
+for clf, name in ((RidgeClassifier(tol=1e-1), "Ridge\nClassifier"),
                   (NeighborsClassifier(n_neighbors=10), "kNN")):
-    print 80 * '='
-    print name
-    results = benchmark(clf)
+    results[name] = benchmark(clf)
 
 for penalty in ["l2", "l1"]:
-    print 80 * '='
-    print "%s penalty" % penalty.upper()
     # Train Liblinear model
-    liblinear_results = benchmark(LinearSVC(loss='l2', penalty=penalty, C=1000,
+    results['Linear SVC\n%s' % penalty] = benchmark(LinearSVC(loss='l2', 
+                                            penalty=penalty, C=1000,
                                             dual=False, tol=1e-3))
-
     # Train SGD model
-    sgd_results = benchmark(SGDClassifier(alpha=.0001, n_iter=50,
-                                          penalty=penalty))
+    results['SGD %s' % penalty] = benchmark(SGDClassifier(alpha=.0001, 
+                                            n_iter=50, penalty=penalty))
 
 # Train SGD with Elastic Net penalty
-print 80 * '='
-print "Elastic-Net penalty"
-sgd_results = benchmark(SGDClassifier(alpha=.0001, n_iter=50,
+results['SGD\nelastic net'] = benchmark(SGDClassifier(alpha=.0001, n_iter=50,
                                       penalty="elasticnet"))
 
 # Train sparse Naive Bayes classifiers
-print 80 * '='
-print "Naive Bayes"
-mnnb_results = benchmark(MultinomialNB(alpha=.01))
-bnb_result = benchmark(BernoulliNB(alpha=.01))
+results['Multinomial\nNaive Bayes'] = benchmark(MultinomialNB(alpha=.01))
+results['Bernouilli\nNaive Bayes'] = benchmark(BernoulliNB(alpha=.01))
+
+################################################################################
+# Plot a summary of the tradeoffs between execution speed and
+# classification accuration
+pl.clf()
+sign = 1
+for name, (score, train_time, test_time) in sorted(results.iteritems()):
+    pl.semilogx(train_time+test_time, score, marker='o')
+    pl.text(train_time+test_time, score + sign*.003, name, 
+            horizontalalignment='center',
+            verticalalignment='center')
+    # Flip the sign to avoid having overlapping labels
+    sign *= -1
+
+pl.xticks((.02, .05, .1, .2, .5, 1, 2, 5), (.02, .05, .1, .2, .5, 1, 2, 5))
+pl.xlabel('Training + test time (seconds)', size=14)
+pl.ylabel('Prediction score', size=14)
+pl.xlim(.014, 6)
+pl.ylim(0.845, 0.905)
+pl.show()
