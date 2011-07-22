@@ -224,16 +224,16 @@ def lars_path(X, y, Xy=None, Gram=None, max_features=None, max_iter=500,
         if z_pos < gamma_:
             # some coefficients have changed sign
             idx = np.where(z == z_pos)[0]
-            if len(idx):
-                # Because of numerical errors, we might not have a z ==
-                # z_pos
 
-                # update the sign, important for LAR
-                sign_active[idx] = -sign_active[idx]
+            # update the sign, important for LAR
+            sign_active[idx] = -sign_active[idx]
 
-                if method == 'lasso':
-                    gamma_ = z_pos
-                drop = True
+            if method == 'lasso':
+                gamma_ = z_pos
+                if len(idx):
+                    # Because of numerical errors, we might not have a z ==
+                    # z_pos
+                    drop = True
 
         n_iter += 1
 
