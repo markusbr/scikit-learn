@@ -25,7 +25,7 @@ from scikits.learn.datasets import fetch_olivetti_faces
 # Display progress logs on stdout
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s')
-n_row, n_col = 4, 4
+n_row, n_col = 2, 3
 n_components = n_row * n_col
 image_shape = (64, 64)
 
@@ -39,12 +39,12 @@ print "Dataset consists of %d images" % len(faces)
 
 ###############################################################################
 def plot_digit_gallery(title, images):
-    pl.figure(figsize=(1. * n_col, 1.13 * n_row))
+    pl.figure(figsize=(2. * n_col, 2.26 * n_row))
     pl.suptitle(title, size=16)
-    vmax = max(images.max(), -images.min())
     for i, comp in enumerate(images):
+        vmax = max(comp.max(), -comp.min())
         pl.subplot(n_row, n_col, i + 1)
-        pl.imshow(comp.reshape(image_shape), cmap=pl.cm.BrBG,
+        pl.imshow(comp.reshape(image_shape), cmap=pl.cm.gray,
                   interpolation='nearest',
                   vmin=-vmax, vmax=vmax)
         pl.xticks(())
