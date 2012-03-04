@@ -35,7 +35,8 @@ i = 1
 colors = np.array([x for x in 'bgrcmykbgrcmykbgrcmykbgrcmyk'])
 colors = np.hstack([colors] * 5)
 
-for dataset in [circles, noisy_circles, moons, noisy_moons, blobs]:
+for i_dataset, dataset in enumerate([circles, noisy_circles, moons,
+                                     noisy_moons, blobs]):
     X, y = dataset
     # estimate bandwidth for mean shift
     bandwidth = estimate_bandwidth(X, quantile=0.2, n_samples=100)
@@ -59,12 +60,15 @@ for dataset in [circles, noisy_circles, moons, noisy_moons, blobs]:
             algorithm.fit(X)
         y_pred = algorithm.labels_
         pl.subplot(5, 5, i)
-        pl.title(str(algorithm).split('(')[0])
+        if i_dataset == 0:
+            pl.title(str(algorithm).split('(')[0])
         pl.scatter(X[:, 0], X[:, 1], color=colors[y_pred].tolist())
         pl.xticks(())
         pl.yticks(())
 
         i += 1
 
+pl.subplots_adjust(left=.001, right=.999, bottom=.01, top=.95,
+                   wspace=.05, hspace=.01)
 pl.show()
 
