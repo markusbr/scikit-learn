@@ -21,6 +21,7 @@ from sklearn.cluster import Ward
 from sklearn.cluster import SpectralClustering
 from sklearn.neighbors import kneighbors_graph
 from sklearn.datasets import make_circles, make_moons, make_blobs
+from sklearn.metrics import euclidean_distances
 
 # Generate datasets
 n_samples = 300
@@ -59,7 +60,7 @@ for dataset in [circles, noisy_circles, moons, noisy_moons, blobs]:
         y_pred = algorithm.labels_
         pl.subplot(5, 5, i)
         pl.title(str(algorithm).split('(')[0])
-        pl.scatter(X[:, 0], X[:, 1], color=colors[y_pred])
+        pl.scatter(X[:, 0], X[:, 1], color=colors[y_pred].tolist())
         pl.xticks(())
         pl.yticks(())
 
