@@ -16,8 +16,11 @@ import scipy.sparse as sp
 
 from .base import BaseEstimator, is_classifier, clone
 from .cross_validation import check_cv
-from .externals.joblib import Parallel, delayed, logger
+from .externals.joblib import Parallel, delayed
+from .externals.joblib import logger as joblib_logger
 from .utils import deprecated
+
+from monologue import get_logger
 
 
 class IterGrid(object):
@@ -72,11 +75,12 @@ def fit_grid_point(X, y, base_clf, clf_params, train, test, loss_func,
 
     Returns the score and the instance of the classifier
     """
+    logger = get_logger("GridSearchCV", verbosity_offset=verbose)
     if verbose > 1:
         start_time = time.time()
         msg = '%s' % (', '.join('%s=%s' % (k, v)
                                      for k, v in clf_params.iteritems()))
-        print "[GridSearchCV] %s %s" % (msg, (64 - len(msg)) * '.')
+        logger.msg("%s %s" % (msg, (64 - len(msg)) * '.'))
 
     # update parameters of the classifier after a copy of its base structure
     # FIXME we should be doing a clone here
@@ -141,9 +145,9 @@ def fit_grid_point(X, y, base_clf, clf_params, train, test, loss_func,
         msg += ", score=%f" % this_score
     if verbose > 1:
         end_msg = "%s -%s" % (msg,
-                              logger.short_format_time(time.time() -
+                              joblib_logger.short_format_time(time.time() -
                                                        start_time))
-        print "[GridSearchCV] %s %s" % ((64 - len(end_msg)) * '.', end_msg)
+        logger.msg("%s %s" % ((64 - len(end_msg)) * '.', end_msg))
     return this_score, clf, this_n_test_samples
 
 
