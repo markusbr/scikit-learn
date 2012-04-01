@@ -7,6 +7,7 @@ Authors : Vincent Michel, Bertrand Thirion, Alexandre Gramfort,
           Gael Varoquaux
 License: BSD 3 clause
 """
+import sys
 from heapq import heapify, heappop, heappush, heappushpop
 import itertools
 import warnings
@@ -17,6 +18,7 @@ from scipy.cluster import hierarchy
 
 from ..base import BaseEstimator
 from ..utils._csgraph import cs_graph_components
+from ..utils.graph_shortest_path import Heap
 from ..externals.joblib import Memory
 from ..metrics import euclidean_distances
 
@@ -27,7 +29,7 @@ from ._feature_agglomeration import AgglomerationTransform
 ###############################################################################
 # Ward's algorithm
 
-def ward_tree(X, connectivity=None, n_components=None, copy=True):
+def ward_tree_old(X, connectivity=None, n_components=None, copy=True):
     """Ward clustering based on a Feature matrix.
 
     The inertia matrix uses a Heapq-based representation.
@@ -182,6 +184,197 @@ def ward_tree(X, connectivity=None, n_components=None, copy=True):
 
     return children, n_components, n_leaves
 
+
+def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
+    """Ward clustering based on a Feature matrix.
+
+    The inertia matrix uses a Heapq-based representation.
+
+    This is the structured version, that takes into account a some topological
+    structure between samples.
+
+    Parameters
+    ----------
+    X : array of shape (n_samples, n_features)
+        feature matrix  representing n_samples samples to be clustered
+
+    connectivity : sparse matrix.
+        connectivity matrix. Defines for each sample the neigbhoring samples
+        following a given structure of the data. The matrix is assumed to
+        be symmetric and only the upper triangular half is used.
+        Default is None, i.e, the Ward algorithm is unstructured.
+
+    n_components : int (optional)
+        Number of connected components. If None the number of connected
+        components is estimated from the connectivity matrix.
+
+    copy : bool (optional)
+        Make a copy of connectivity or work inplace. If connectivity
+        is not of LIL type there will be a copy in any case.
+
+    Returns
+    -------
+    children : list of pairs. Lenght of n_nodes
+               list of the children of each nodes.
+               Leaves of the tree have empty list of children.
+
+    n_components : sparse matrix.
+        The number of connected components in the graph.
+
+    n_leaves : int
+        The number of leaves in the tree
+    """
+    X = np.asarray(X)
+    n_samples, n_features = X.shape
+    if X.ndim == 1:
+        X = np.reshape(X, (-1, 1))
+
+    # Compute the number of nodes
+    if connectivity is not None:
+        if n_components is None:
+            n_components, labels = cs_graph_components(connectivity)
+        if n_components > 1:
+            warnings.warn("the number of connected components of the"
+            " connectivity matrix is %d > 1. Completing it to avoid"
+            " stopping the tree early."
+            % n_components)
+            if copy:
+                connectivity = connectivity.copy()
+                copy = False
+            connectivity = _fix_connectivity(X, connectivity,
+                                            n_components, labels)
+            n_components = 1
+    else:
+        out = hierarchy.ward(X)
+        children_ = out[:, :2].astype(np.int)
+        return children_, 1, n_samples
+
+    n_nodes = 2 * n_samples - n_components
+
+    if (connectivity.shape[0] != n_samples or
+        connectivity.shape[1] != n_samples):
+        raise ValueError('Wrong shape for connectivity matrix: %s '
+                         'when X is %s' % (connectivity.shape, X.shape))
+    # convert connectivity matrix to LIL eventually with a copy
+    # XXX: maybe we can use a COO, which will save memory compared to a
+    # LIL
+    if sparse.isspmatrix_lil(connectivity) and copy:
+        connectivity = connectivity.copy()
+    else:
+        connectivity = connectivity.tolil()
+
+    # Remove diagonal from connectivity matrix
+    connectivity.setdiag(np.zeros(connectivity.shape[0]))
+
+    # create inertia matrix
+    coord_row = []
+    coord_col = []
+    A = []
+    for ind, row in enumerate(connectivity.rows):
+        A.append(row)
+        # We keep only the upper triangular for the moments
+        # Generator expressions are faster than arrays on the following
+        row = [i for i in row if i < ind]
+        coord_row.extend(len(row) * [ind, ])
+        coord_col.extend(row)
+
+    coord_row = np.array(coord_row, dtype=np.int)
+    coord_col = np.array(coord_col, dtype=np.int)
+
+    # build moments as a list
+    moments_1 = np.zeros(n_nodes)
+    moments_1[:n_samples] = 1
+    moments_2 = np.zeros((n_nodes, n_features))
+    moments_2[:n_samples] = X
+    inertia = np.empty(len(coord_row), dtype=np.float)
+    _hierarchical.compute_ward_dist(moments_1, moments_2,
+                             coord_row, coord_col, inertia)
+    inertia = Heap(inertia)
+
+    # prepare the main fields
+    parent = np.arange(n_nodes, dtype=np.int)
+    heights = np.zeros(n_nodes)
+    used_node = np.ones(n_nodes, dtype=bool)
+    children = []
+
+    # XXX: difficulty: I need to reuse the positions in the coord_row,
+    # coord_col, and inertia matrices
+    # Pad the coord_row and coord_col arrays to the full tree size
+    coord_row.resize(n_nodes)
+    coord_col.resize(n_nodes)
+
+    visited = np.empty(n_nodes, dtype=bool)
+
+    # recursive merge loop
+    for k in xrange(n_samples, n_nodes):
+        sys.stderr.write('\n%i' % k)
+        # identify the merge
+        while True:
+            index, inert = inertia.pop_min()
+            sys.stderr.write('-')
+            i = coord_row[index]
+            j = coord_col[index]
+            if used_node[i] and used_node[j]:
+                break
+        sys.stderr.write('.')
+        parent[i], parent[j], heights[k] = k, k, inert
+        children.append([i, j])
+        used_node[i] = used_node[j] = False
+
+        # update the moments
+        moments_1[k] = moments_1[i] + moments_1[j]
+        moments_2[k] = moments_2[i] + moments_2[j]
+
+        # update the structure matrix A and the inertia matrix
+        visited_coord_col = []
+        visited[:] = False
+        visited[k] = True
+        # here we find the neighbors of the nodes that got merged
+        for l in set(A[i]).union(A[j]):
+            l = _hierarchical._get_parent(l, parent)
+            if not visited[l]:
+                visited[l] = True
+                visited_coord_col.append(l)
+                A[l].append(k)
+                # Remove from the inertia heap: this connection is no
+                # longer accessible
+                if l == 78:
+                    sys.stderr.write('(-78)')
+                try:
+                    inertia.pop(l)
+                except ValueError:
+                    "Node not in heap, we already popped it."
+        sys.stderr.write('n visited %s ' % len(visited_coord_col))
+        A.append(visited_coord_col)
+        visited_coord_col = np.array(visited_coord_col, dtype=np.int)
+        visited_coord_row = np.empty_like(visited_coord_col)
+        visited_coord_row.fill(k)
+        new_inertia = np.empty(len(visited_coord_row), dtype=np.float)
+
+        _hierarchical.compute_ward_dist(moments_1, moments_2,
+                                   visited_coord_row, visited_coord_col,
+                                   new_inertia)
+        for tupl in itertools.izip(new_inertia, visited_coord_row, visited_coord_col,
+                    np.where(visited)[0]):
+            # XXX: problem: row we don't have an unique index. We can
+            # reuse existing indices thanks to the 'visited' array
+            this_inertia, this_coord_col, this_coord_row, this_index = tupl
+            sys.stderr.write('.')
+            inertia.insert(this_index, this_inertia)
+            if this_index == 78:
+                sys.stderr.write('(+78)')
+            sys.stderr.write('_')
+            coord_row[this_index] = this_coord_row
+            coord_col[this_index] = this_coord_col
+
+    # Separate leaves in children (empty lists up to now)
+    n_leaves = n_samples
+    children = np.array(children)  # return numpy array for efficient caching
+
+    return children, n_components, n_leaves
+
+
+ward_tree = ward_tree_new
 
 ###############################################################################
 # For non fully-connected graphs

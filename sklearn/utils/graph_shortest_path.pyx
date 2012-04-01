@@ -8,6 +8,7 @@ the Floyd-Warshall algorithm, or Dykstra's algorithm with Fibonacci Heaps.
 
 # Author: Jake Vanderplas  -- <vanderplas@astro.washington.edu>
 # License: BSD, (C) 2011
+import sys
 
 import numpy as np
 cimport numpy as np
@@ -447,7 +448,7 @@ cdef FibonacciNode* remove_min(FibonacciHeap* heap):
 # Debugging: Functions for printing the fibonacci heap
 #
 #cdef void print_node(FibonacciNode* node, int level=0):
-#    print '%s(%i,%i) %i' % (level*'   ', node.index, node.val, node.rank)
+#    print '%s(%i, %i) %i' % (level*'   ', node.index, node.val, node.rank)
 #    if node.children:
 #        print_node(leftmost_sibling(node.children), level+1)
 #    if node.right_sibling:
@@ -600,3 +601,72 @@ cdef void dijkstra_one_row(unsigned int i_node,
 
         #v has now been scanned: add the distance to the results
         graph[i_node, v.index] = v.val
+
+
+cdef class Heap:
+    """ A fast heap for floats implemented using Fibonacci heaps """
+    cdef FibonacciHeap heap
+    cdef FibonacciNode* nodes
+    cpdef object N_max
+
+    def __init__(self, arr, max_nodes=None):
+        """ Initialize the heap from an array """
+        cdef int N = len(arr)
+        cdef int N_max = max_nodes if not max_nodes is None else 2*N
+        # Need to check that max_nodes is greater than than N
+
+        cdef FibonacciNode* nodes = <FibonacciNode*> malloc(N_max *
+                                                            sizeof(FibonacciNode))
+        # XXX: should we sort the array before, or is the node
+        # insertion as efficient algorithmically?
+        for i from 0 <= i < N:
+            initialize_node(&nodes[i], i, arr[i])
+            insert_node(&self.heap, &nodes[i])
+            nodes[i].state = 1   # 1 -> IN_HEAP
+        for i from N <= i < N_max:
+            initialize_node(&nodes[i], i)
+        self.N_max = N_max
+        self.nodes = nodes
+
+    def insert(self, unsigned int index, DTYPE_t value):
+        """ Insert an entry with the given index and value """
+        assert index < self.N_max, ('Invalid index %i. The maximum '
+          'index possible in this heap is %i' % (index, self.N_max))
+        if self.nodes[index].state != 0:
+            # XXX: can I raise errors like this in Cython?
+            raise ValueError('Node %i already in heap' % index)
+        initialize_node(&self.nodes[index], index, value)
+        insert_node(&self.heap, &self.nodes[index])
+        self.nodes[index].state = 1   # 1 -> IN_HEAP
+
+    def pop(self, unsigned int index):
+        assert index < self.N_max, ('Invalid index %i. The maximum '
+          'index possible in this heap is %i' % (index, self.N_max))
+        if self.nodes[index].state == 0:
+            # XXX: can I raise errors like this in Cython?
+            raise ValueError('Node %i not in heap' % index)
+        if self.nodes[index].parent:
+            if self.nodes[index].parent.rank == 0:
+                raise ImportError('Node %i is in tree with a dead parent %i'
+                % (index, self.nodes[index].parent.index))
+        remove(&self.nodes[index])
+        self.nodes[index].state = 0   # 0 -> NOT_IN_HEAP
+        return self.nodes[index].val
+
+    def pop_min(self):
+        """ Remove the smallest element of the heap and return it"""
+        cdef FibonacciNode* node
+        if not self.heap.min_node:
+            raise StopIteration
+        else:
+            node = remove_min(&self.heap)
+            node.state = 0 # 0 > NOT_IN_HEAP
+        return node.index, node.val
+
+    def __dealloc__(self):
+        """ Frees the memory. """
+        free(<void*>self.nodes)
+        # self.heap has been allocated in Cython, it will be garbage
+        # collected
+
+
