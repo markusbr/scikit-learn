@@ -643,11 +643,12 @@ cdef class Heap:
         assert index < self.N_max, ('Invalid index %i. The maximum '
           'index possible in this heap is %i' % (index, self.N_max))
         if self.nodes[index].state == 0:
-            # XXX: can I raise errors like this in Cython?
             raise ValueError('Node %i not in heap' % index)
         if self.nodes[index].parent:
+            # XXX: we shouldn't have to check this: a parent's node rank
+            # should never be 0
             if self.nodes[index].parent.rank == 0:
-                raise ImportError('Node %i is in tree with a dead parent %i'
+                raise IndexError('Node %i is in tree with a dead parent %i'
                 % (index, self.nodes[index].parent.index))
         remove(&self.nodes[index])
         self.nodes[index].state = 0   # 0 -> NOT_IN_HEAP
