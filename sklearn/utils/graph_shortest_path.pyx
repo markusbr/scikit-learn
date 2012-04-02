@@ -609,9 +609,11 @@ cdef class Heap:
     cdef FibonacciNode* nodes
     cdef int N_max
 
+    @cython.boundscheck(False)
+    @cython.wraparound(False)
     def __init__(self, np.ndarray[DTYPE_t, ndim=1] arr, max_nodes=None):
         """ Initialize the heap from an array """
-        cdef int N = len(arr)
+        cdef int N = arr.size
         cdef int N_max = max_nodes if not max_nodes is None else 2*N
         cdef int i
         # Need to check that max_nodes is greater than than N
@@ -635,17 +637,18 @@ cdef class Heap:
             raise IndexError('Invalid index %i. The maximum '
                 'index possible in this heap is %i' % (index, self.N_max))
         if self.nodes[index].state != 0:
-            # XXX: can I raise errors like this in Cython?
             raise ValueError('Node %i already in heap' % index)
         initialize_node(&self.nodes[index], index, value)
         insert_node(&self.heap, &self.nodes[index])
         self.nodes[index].state = 1   # 1 -> IN_HEAP
 
-    def pop(self, unsigned int index):
+    def pop(self, unsigned int index, int ignore_inexisting=0):
         if not index < self.N_max:
             raise IndexError('Invalid index %i. The maximum '
                 'index possible in this heap is %i' % (index, self.N_max))
         if self.nodes[index].state == 0:
+            if ignore_inexisting:
+                return 0
             raise ValueError('Node %i not in heap' % index)
         # Put the node at the bottom of the heap
         decrease_val(&self.heap, &self.nodes[index],

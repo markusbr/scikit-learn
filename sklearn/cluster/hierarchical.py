@@ -185,6 +185,7 @@ def ward_tree_old(X, connectivity=None, n_components=None, copy=True):
     return children, n_components, n_leaves
 
 
+#@profile
 def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
     """Ward clustering based on a Feature matrix.
 
@@ -329,19 +330,18 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
         visited_coord_col = []
         visited[:] = False
         visited[k] = True
+        visited_indices = list()
         # here we find the neighbors of the nodes that got merged
         for l in set(A[i]).union(A[j]):
             l = _hierarchical._get_parent(l, parent)
             if not visited[l]:
                 visited[l] = True
+                visited_indices.append(l)
                 visited_coord_col.append(l)
                 A[l].append(k)
                 # Remove from the inertia heap: this connection is no
                 # longer accessible
-                try:
-                    inertia.pop(l)
-                except ValueError:
-                    "Node not in heap, we already popped it."
+                inertia.pop(l, ignore_inexisting=1)
         A.append(visited_coord_col)
         visited_coord_col = np.array(visited_coord_col, dtype=np.int)
         visited_coord_row = np.empty_like(visited_coord_col)
@@ -352,7 +352,7 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
                                    visited_coord_row, visited_coord_col,
                                    new_inertia)
         for tupl in itertools.izip(new_inertia, visited_coord_row, visited_coord_col,
-                    np.where(visited)[0]):
+                    visited_indices):
             # XXX: problem: row we don't have an unique index. We can
             # reuse existing indices thanks to the 'visited' array
             this_inertia, this_coord_col, this_coord_row, this_index = tupl
