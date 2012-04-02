@@ -289,7 +289,9 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
     inertia = np.empty(len(coord_row), dtype=np.float)
     _hierarchical.compute_ward_dist(moments_1, moments_2,
                              coord_row, coord_col, inertia)
+    sys.stderr.write('Starting heap construction\n')
     inertia = Heap(inertia)
+    sys.stderr.write('Heap construction done\n')
 
     # prepare the main fields
     parent = np.arange(n_nodes, dtype=np.int)
@@ -307,16 +309,14 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
 
     # recursive merge loop
     for k in xrange(n_samples, n_nodes):
-        sys.stderr.write('\n%i' % k)
+        #sys.stderr.write('Merge % 3i\n' % (k - n_samples))
         # identify the merge
         while True:
             index, inert = inertia.pop_min()
-            sys.stderr.write('-')
             i = coord_row[index]
             j = coord_col[index]
             if used_node[i] and used_node[j]:
                 break
-        sys.stderr.write('.')
         parent[i], parent[j], heights[k] = k, k, inert
         children.append([i, j])
         used_node[i] = used_node[j] = False
@@ -338,13 +338,10 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
                 A[l].append(k)
                 # Remove from the inertia heap: this connection is no
                 # longer accessible
-                if l == 78:
-                    sys.stderr.write('(-78)')
                 try:
                     inertia.pop(l)
                 except ValueError:
                     "Node not in heap, we already popped it."
-        sys.stderr.write('n visited %s ' % len(visited_coord_col))
         A.append(visited_coord_col)
         visited_coord_col = np.array(visited_coord_col, dtype=np.int)
         visited_coord_row = np.empty_like(visited_coord_col)
@@ -359,11 +356,7 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
             # XXX: problem: row we don't have an unique index. We can
             # reuse existing indices thanks to the 'visited' array
             this_inertia, this_coord_col, this_coord_row, this_index = tupl
-            sys.stderr.write('.')
             inertia.insert(this_index, this_inertia)
-            if this_index == 78:
-                sys.stderr.write('(+78)')
-            sys.stderr.write('_')
             coord_row[this_index] = this_coord_row
             coord_col[this_index] = this_coord_col
 
@@ -375,6 +368,7 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
 
 
 ward_tree = ward_tree_new
+#ward_tree = ward_tree_old
 
 ###############################################################################
 # For non fully-connected graphs

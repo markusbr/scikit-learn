@@ -607,12 +607,13 @@ cdef class Heap:
     """ A fast heap for floats implemented using Fibonacci heaps """
     cdef FibonacciHeap heap
     cdef FibonacciNode* nodes
-    cpdef object N_max
+    cdef int N_max
 
-    def __init__(self, arr, max_nodes=None):
+    def __init__(self, np.ndarray[DTYPE_t, ndim=1] arr, max_nodes=None):
         """ Initialize the heap from an array """
         cdef int N = len(arr)
         cdef int N_max = max_nodes if not max_nodes is None else 2*N
+        cdef int i
         # Need to check that max_nodes is greater than than N
 
         cdef FibonacciNode* nodes = <FibonacciNode*> malloc(N_max *
@@ -630,8 +631,9 @@ cdef class Heap:
 
     def insert(self, unsigned int index, DTYPE_t value):
         """ Insert an entry with the given index and value """
-        assert index < self.N_max, ('Invalid index %i. The maximum '
-          'index possible in this heap is %i' % (index, self.N_max))
+        if not index < self.N_max:
+            raise IndexError('Invalid index %i. The maximum '
+                'index possible in this heap is %i' % (index, self.N_max))
         if self.nodes[index].state != 0:
             # XXX: can I raise errors like this in Cython?
             raise ValueError('Node %i already in heap' % index)
@@ -640,17 +642,16 @@ cdef class Heap:
         self.nodes[index].state = 1   # 1 -> IN_HEAP
 
     def pop(self, unsigned int index):
-        assert index < self.N_max, ('Invalid index %i. The maximum '
-          'index possible in this heap is %i' % (index, self.N_max))
+        if not index < self.N_max:
+            raise IndexError('Invalid index %i. The maximum '
+                'index possible in this heap is %i' % (index, self.N_max))
         if self.nodes[index].state == 0:
             raise ValueError('Node %i not in heap' % index)
-        if self.nodes[index].parent:
-            # XXX: we shouldn't have to check this: a parent's node rank
-            # should never be 0
-            if self.nodes[index].parent.rank == 0:
-                raise IndexError('Node %i is in tree with a dead parent %i'
-                % (index, self.nodes[index].parent.index))
-        remove(&self.nodes[index])
+        # Put the node at the bottom of the heap
+        decrease_val(&self.heap, &self.nodes[index],
+                     self.heap.min_node.val - 1)
+        # Now we can remove it
+        remove_min(&self.heap)
         self.nodes[index].state = 0   # 0 -> NOT_IN_HEAP
         return self.nodes[index].val
 
