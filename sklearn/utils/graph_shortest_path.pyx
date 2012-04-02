@@ -615,17 +615,20 @@ cdef class Heap:
         """ Initialize the heap from an array """
         cdef int N = arr.size
         cdef int N_max = max_nodes if not max_nodes is None else 2*N
-        cdef int i
+        cdef int i, index
+        cdef np.ndarray[np.int_t, ndim=1] order 
         # Need to check that max_nodes is greater than than N
 
         cdef FibonacciNode* nodes = <FibonacciNode*> malloc(N_max *
                                                             sizeof(FibonacciNode))
+        order = np.argsort(arr)
         # XXX: should we sort the array before, or is the node
         # insertion as efficient algorithmically?
         for i from 0 <= i < N:
-            initialize_node(&nodes[i], i, arr[i])
-            insert_node(&self.heap, &nodes[i])
-            nodes[i].state = 1   # 1 -> IN_HEAP
+            index = order[N - 1 - i]
+            initialize_node(&nodes[index], index, arr[index])
+            insert_node(&self.heap, &nodes[index])
+            nodes[index].state = 1   # 1 -> IN_HEAP
         for i from N <= i < N_max:
             initialize_node(&nodes[i], i)
         self.N_max = N_max
