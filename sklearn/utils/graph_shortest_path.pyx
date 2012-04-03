@@ -661,6 +661,33 @@ cdef class Heap:
         self.nodes[index].state = 0   # 0 -> NOT_IN_HEAP
         return self.nodes[index].val
 
+    def set_val(self, unsigned int index, DTYPE_t value,
+                     int ignore_inexisting=0):
+        if not index < self.N_max:
+            raise IndexError('Invalid index %i. The maximum '
+                'index possible in this heap is %i' % (index, self.N_max))
+        if self.nodes[index].state == 0:
+            if ignore_inexisting:
+                initialize_node(&self.nodes[index], index, value)
+                insert_node(&self.heap, &self.nodes[index])
+                self.nodes[index].state = 1   # 1 -> IN_HEAP
+                return
+            else:
+                raise ValueError('Node %i not in heap' % index)
+        if value == self.nodes[index].val:
+            return
+        elif value < self.nodes[index].val:
+            decrease_val(&self.heap, &self.nodes[index],
+                        value)
+        else:
+            # Put the node at the bottom of the heap
+            decrease_val(&self.heap, &self.nodes[index],
+                        self.heap.min_node.val - 1)
+            # Now we can remove it
+            remove_min(&self.heap)
+            self.nodes[index].val = value
+            insert_node(&self.heap, &self.nodes[index])
+
     def pop_min(self):
         """ Remove the smallest element of the heap and return it"""
         cdef FibonacciNode* node

@@ -29,6 +29,7 @@ from ._feature_agglomeration import AgglomerationTransform
 ###############################################################################
 # Ward's algorithm
 
+#@profile
 def ward_tree_old(X, connectivity=None, n_components=None, copy=True):
     """Ward clustering based on a Feature matrix.
 
@@ -339,9 +340,6 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
                 visited_indices.append(l)
                 visited_coord_col.append(l)
                 A[l].append(k)
-                # Remove from the inertia heap: this connection is no
-                # longer accessible
-                inertia.pop(l, ignore_inexisting=1)
         A.append(visited_coord_col)
         visited_coord_col = np.array(visited_coord_col, dtype=np.int)
         visited_coord_row = np.empty_like(visited_coord_col)
@@ -356,7 +354,8 @@ def ward_tree_new(X, connectivity=None, n_components=None, copy=True):
             # XXX: problem: row we don't have an unique index. We can
             # reuse existing indices thanks to the 'visited' array
             this_inertia, this_coord_col, this_coord_row, this_index = tupl
-            inertia.insert(this_index, this_inertia)
+            inertia.set_val(this_index, this_inertia,
+                                 ignore_inexisting=1)
             coord_row[this_index] = this_coord_row
             coord_col[this_index] = this_coord_col
 
