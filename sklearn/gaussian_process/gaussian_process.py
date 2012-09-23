@@ -268,6 +268,7 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
             predictions.
         """
         self.random_state = check_random_state(self.random_state)
+        logger = self._get_logger()
 
         # Force data to 2D numpy.array
         X = array2d(X)
@@ -340,9 +341,9 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
         # Determine Gaussian Process model parameters
         if self.thetaL is not None and self.thetaU is not None:
             # Maximum Likelihood Estimation of the parameters
-            if self.verbose:
-                print("Performing Maximum Likelihood Estimation of the "
-                    + "autocorrelation parameters...")
+            logger.progress(
+                    "Performing Maximum Likelihood Estimation of the "
+                    "autocorrelation parameters...")
             self.theta_, self.reduced_likelihood_function_value_, par = \
                 self._arg_max_reduced_likelihood_function()
             if np.isinf(self.reduced_likelihood_function_value_):
@@ -351,8 +352,7 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
 
         else:
             # Given parameters
-            if self.verbose:
-                print("Given autocorrelation parameters. "
+            logger.progress("Given autocorrelation parameters. "
                     + "Computing Gaussian Process model parameters...")
             self.theta_ = self.theta0
             self.reduced_likelihood_function_value_, par = \
@@ -370,9 +370,8 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
         if self.storage_mode == 'light':
             # Delete heavy data (it will be computed again if required)
             # (it is required only when MSE is wanted in self.predict)
-            if self.verbose:
-                print("Light storage mode specified. "
-                    + "Flushing autocorrelation matrix...")
+            logger.progress("Light storage mode specified. "
+                            "Flushing autocorrelation matrix...")
             self.D = None
             self.ij = None
             self.F = None
@@ -421,6 +420,7 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
 
         # Run input checks
         self._check_params(n_samples)
+        logger = self._get_logger()
 
         if n_features_X != n_features:
             raise ValueError(("The number of features in X (X.shape[1] = %d) "
@@ -456,10 +456,10 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
                 C = self.C
                 if C is None:
                     # Light storage mode (need to recompute C, F, Ft and G)
-                    if self.verbose:
-                        print("This GaussianProcess used 'light' storage mode "
-                            + "at instanciation. Need to recompute "
-                            + "autocorrelation matrix...")
+                    logger.progress(
+                        "This GaussianProcess used 'light' storage mode "
+                        + "at instanciation. Need to recompute "
+                        + "autocorrelation matrix...")
                     reduced_likelihood_function_value, par = \
                         self.reduced_likelihood_function()
                     self.C = par['C']
@@ -693,11 +693,12 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
         best_optimal_theta = []
         best_optimal_rlf_value = []
         best_optimal_par = []
+        logger = self._get_logger()
 
-        if self.verbose:
-            print "The chosen optimizer is: " + str(self.optimizer)
-            if self.random_start > 1:
-                print str(self.random_start) + " random starts are required."
+        logger.progress("The chosen optimizer is: %s", self.optimizer)
+        if self.random_start > 1:
+            logger.progress("%s random starts are required.",
+                            self.random_start)
 
         percent_completed = 0.
 
@@ -737,7 +738,8 @@ class GaussianProcess(BaseEstimator, RegressorMixin):
                         optimize.fmin_cobyla(minus_reduced_likelihood_function,
                                 np.log10(theta0), constraints, iprint=0)
                 except ValueError as ve:
-                    print("Optimization failed. Try increasing the ``nugget``")
+                    logger.error(
+                        "Optimization failed. Try increasing the ``nugget``")
                     raise ve
 
                 optimal_theta = 10. ** log10_optimal_theta
